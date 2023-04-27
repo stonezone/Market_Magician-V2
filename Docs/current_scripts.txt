@@ -1,0 +1,39 @@
+import json
+from AdvancedDataProcessor import AdvancedDataProcessor
+from MarketDataCollector import MarketDataCollector
+from TradeManager import TradeManager
+from StrategyCreator import StrategyCreator
+
+# Load config from JSON file
+with open("config.json", "r") as config_file:
+    config = json.load(config_file)
+    
+def main():
+    # Initialize the MarketDataCollector
+    data_collector = MarketDataCollector(config)
+    historical_data = data_collector.get_data("AAPL", start_date="2020-01-01", end_date="2021-12-31")
+
+    # Initialize the AdvancedDataProcessor
+    advanced_data_processor = AdvancedDataProcessor(historical_data)
+
+    # Initialize the TradeManager
+    trade_manager = TradeManager(config["starting_balance"], config["alpaca"], StrategyCreator)
+
+
+    # Initialize the StrategyCreator
+    strategy_creator = StrategyCreator(advanced_data_processor)
+
+    # Define your strategy configuration
+    strategy_config = {
+        'moving_average': {'window': 40},
+        # Add more techniques if needed
+    }
+
+    # Generate trading signals
+    signals = strategy_creator.create_strategy(strategy_config)
+
+    # Execute trades
+    trade_manager.execute_trades(signals)
+
+if __name__ == "__main__":
+    main()

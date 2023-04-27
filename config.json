@@ -1,0 +1,27 @@
+{
+  "starting_balance": 10000,
+  "data_sources": {
+    "alpha_vantage": {
+      "api_key": "K9N1AKYPENS0N9PK"
+    },
+    "yahoo": {}
+  },
+  "alpaca": {
+    "api_key": "PK89O0P6CFG4L5AN5VCJ",
+    "api_secret": "iFQh1Y27Ba3LSDyzRO1hqgDwo3a01e9eMBpBCLVb8",
+    "base_url": "https://paper-api.alpaca.markets"
+  },
+  "techniques": {
+    "moving_average": {
+      "window": 10
+    },
+    "RSI": {
+      "window": 14
+    },
+    "MACD": {
+      "short_window": 12,
+      "long_window": 26,
+      "signal_window": 9
+    }
+  }
+}

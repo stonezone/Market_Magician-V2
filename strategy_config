@@ -1,0 +1,5 @@
+strategy_config = {
+    'moving_average': {'window': 5},
+    'RSI': {'window': 14},
+    'MACD': {'short_window': 12, 'long_window': 26, 'signal_window': 9}
+}

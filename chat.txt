@@ -1,0 +1,292 @@
+[here is the contents of AdvancedDataProcessor.py:]
+import pandas as pd
+import numpy as np
+from DataStorageManager import DataStorageManager
+
+class AdvancedDataProcessor:
+
+        def __init__(self, data_storage_manager):
+            self.data_storage_manager = data_storage_manager
+
+        def apply_techniques(self, df, techniques):
+            results = {}
+
+            if 'moving_average' in techniques:
+                window = techniques['moving_average']['window']
+                results['moving_average'] = self.calculate_moving_average(df, window)
+
+            if 'RSI' in techniques:
+                window = techniques['RSI']['window']
+                results['RSI'] = self.calculate_RSI(df, window)
+
+            if 'MACD' in techniques:
+                short_window = techniques['MACD']['short_window']
+                long_window = techniques['MACD']['long_window']
+                signal_window = techniques['MACD']['signal_window']
+                results['MACD'] = self.calculate_MACD(df, short_window, long_window, signal_window)
+
+            return results
+
+        def calculate_moving_average(self, df, window):
+            return df['Close'].rolling(window=window).mean()
+
+        def calculate_RSI(self, df, window):
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+
+            avg_gain = gain.rolling(window=window).mean()
+            avg_loss = loss.rolling(window=window).mean()
+
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            return rsi
+
+        def calculate_MACD(self, df, short_window, long_window, signal_window):
+            short_ema = df['Close'].ewm(span=short_window, adjust=False).mean()
+            long_ema = df['Close'].ewm(span=long_window, adjust=False).mean()
+            macd_line = short_ema - long_ema
+            signal_line = macd_line.ewm(span=signal_window, adjust=False).mean()
+
+            return {'macd_line': macd_line, 'signal_line': signal_line}
+
+
+[here is the contents of MarketDataCollector.py:]
+# MarketDataCollector.py
+# This script contains the MarketDataCollector class responsible for fetching market data from various
+# data sources (e.g., Alpha Vantage, Yahoo Finance). It interacts with the DataStorageManager class to
+# provide the collected data for storage. It is used in main.py to fetch market data for the specified symbols.
+
+import pandas as pd
+from alpha_vantage.timeseries import TimeSeries
+import yfinance as yf
+
+class MarketDataCollector:
+
+    def __init__(self, config):
+        self.config = config
+
+    def get_data(self, symbol, start_date, end_date, source="yahoo"):
+        if source == "alpha_vantage":
+            return self._get_data_alpha_vantage(symbol)
+        elif source == "yahoo":
+            return self._get_data_yahoo(symbol, start_date, end_date)
+        else:
+            raise ValueError(f"Unsupported data source: {source}")
+
+    def _get_data_alpha_vantage(self, symbol):
+        api_key = self.config["data_sources"]["alpha_vantage"]["api_key"]
+        ts = TimeSeries(key=api_key, output_format="pandas")
+        data, _ = ts.get_daily(symbol, outputsize="full")
+        return data
+
+    def _get_data_yahoo(self, symbol, start_date, end_date):
+        stock_data = yf.download(symbol, start=start_date, end=end_date)
+        return stock_data
+
+[here is the contents of TradeManager.py:]
+class TradeManager:
+    def __init__(self, starting_balance, alpaca_config, strategy_creator):
+        self.alpaca_config = alpaca_config
+        self.strategy_creator = strategy_creator
+        self.equity = starting_balance
+        self.open_positions = []
+        self.closed_positions = []
+
+
+    def execute_trades(self, strategy_signals):
+        for signal in strategy_signals:
+            if signal["action"] == "buy":
+                self.buy(signal["symbol"], signal["quantity"], signal["price"])
+                print(f"Buying {signal['quantity']} shares of {signal['symbol']} at {signal['price']}")
+            elif signal["action"] == "sell":
+                self.sell(signal["symbol"], signal["quantity"], signal["price"])
+                print(f"Selling {signal['quantity']} shares of {signal['symbol']} at {signal['price']}")
+
+        # Add a print statement to show the updated portfolio
+        print("Updated portfolio:", self.open_positions)
+        self.calculate_performance_metrics()
+
+    def buy(self, symbol, quantity, price):
+        # Implement your buy logic here
+        pass
+
+    def sell(self, symbol, quantity, price):
+        # Implement your sell logic here
+        pass
+
+    def calculate_performance_metrics(self):
+        total_profit_loss = sum([position["profit_loss"] for position in self.closed_positions])
+        winning_trades = len([position for position in self.closed_positions if position["profit_loss"] > 0])
+        losing_trades = len([position for position in self.closed_positions if position["profit_loss"] < 0])
+        win_rate = winning_trades / (winning_trades + losing_trades) if (winning_trades + losing_trades) > 0 else 0
+        max_drawdown = self.calculate_drawdown()
+
+        print("Total Profit/Loss:", total_profit_loss)
+        print("Winning Trades:", winning_trades)
+        print("Losing Trades:", losing_trades)
+        print("Win Rate:", win_rate)
+        print("Max Drawdown:", max_drawdown)
+
+    def calculate_drawdown(self):
+        # Calculate the drawdown based on closed_positions
+        pass
+
+[here is the contents of DataStorageManager.py:]
+# DataStorageManager.py
+# This script contains the DataStorageManager class responsible for storing and retrieving market data
+# using a SQLite database. It interacts with the MarketDataCollector class, which provides the market data
+# to be stored. It is used in main.py to save the collected data and load it when needed.
+
+import sqlite3
+
+class DataStorageManager:
+
+    def __init__(self, config):
+        self.config = config
+        self.db_name = "market_data.db"
+        self._initialize_db()
+
+    def _initialize_db(self):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS market_data (
+                    id INTEGER PRIMARY KEY,
+                    symbol TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    open FLOAT NOT NULL,
+                    high FLOAT NOT NULL,
+                    low FLOAT NOT NULL,
+                    close FLOAT NOT NULL,
+                    volume INTEGER NOT NULL,
+                    UNIQUE (symbol, date)
+                )
+            """)
+            conn.commit()
+
+    def store_data(self, symbol, data):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            for date, row in data.iterrows():
+                cursor.execute("""
+                    INSERT OR IGNORE INTO market_data (symbol, date, open, high, low, close, volume)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (symbol, date.strftime('%Y-%m-%d'), row["Open"], row["High"], row["Low"], row["Close"], row["Volume"]))
+            conn.commit()
+    
+    def get_data(self, symbol, start_date, end_date):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT date, open, high, low, close, volume
+                FROM market_data
+                WHERE symbol = ? AND date >= ? AND date <= ?
+                ORDER BY date
+            """, (symbol, start_date, end_date))
+            data = cursor.fetchall()
+            return data
+	
+[here is the contents of StrategyCreator.py:]
+from AdvancedDataProcessor import AdvancedDataProcessor
+
+class StrategyCreator:
+    def __init__(self, advanced_data_processor):
+        self.advanced_data_processor = advanced_data_processor
+
+    def create_strategy(self, strategy_config):
+        signals = []
+
+        techniques = strategy_config
+
+        analysis_results = self.advanced_data_processor.apply_techniques(strategy_config, techniques)
+        for technique, analysis_result in analysis_results.items():
+            signal = self.generate_signal(technique, analysis_result)
+            signals.extend(signal)
+
+        return signals
+
+    def generate_signal(self, technique, analysis_result):
+        if technique == 'moving_average':
+            return self.generate_moving_average_signal(analysis_result)
+        elif technique == 'RSI':
+            return self.generate_rsi_signal(analysis_result)
+        elif technique == 'MACD':
+            return self.generate_macd_signal(analysis_result)
+        else:
+            raise ValueError(f"Unknown technique: {technique}")
+
+    def generate_moving_average_signal(self, moving_average):
+        signals = []
+        position = 0
+
+        for i in range(1, len(moving_average)):
+            if moving_average[i] > moving_average[i - 1] and position == 0:
+                signals.append({"action": "buy", "symbol": "AAPL", "quantity": 10, "price": moving_average.index[i]})
+                position = 1
+            elif moving_average[i] < moving_average[i - 1] and position == 1:
+                signals.append({"action": "sell", "symbol": "AAPL", "quantity": 10, "price": moving_average.index[i]})
+                position = 0
+
+        return signals
+
+    def generate_rsi_signal(self, rsi):
+        # Modify this function similar to generate_moving_average_signal
+        pass
+
+    def generate_macd_signal(self, macd):
+        # Modify this function similar to generate_moving_average_signal
+        pass
+
+[here is the contents of main.py:]
+from AdvancedDataProcessor import AdvancedDataProcessor
+
+class StrategyCreator:
+    def __init__(self, advanced_data_processor):
+        self.advanced_data_processor = advanced_data_processor
+
+    def create_strategy(self, strategy_config):
+        signals = []
+
+        techniques = strategy_config
+
+        analysis_results = self.advanced_data_processor.apply_techniques(strategy_config, techniques)
+        for technique, analysis_result in analysis_results.items():
+            signal = self.generate_signal(technique, analysis_result)
+            signals.extend(signal)
+
+        return signals
+
+    def generate_signal(self, technique, analysis_result):
+        if technique == 'moving_average':
+            return self.generate_moving_average_signal(analysis_result)
+        elif technique == 'RSI':
+            return self.generate_rsi_signal(analysis_result)
+        elif technique == 'MACD':
+            return self.generate_macd_signal(analysis_result)
+        else:
+            raise ValueError(f"Unknown technique: {technique}")
+
+    def generate_moving_average_signal(self, moving_average):
+        signals = []
+        position = 0
+
+        for i in range(1, len(moving_average)):
+            if moving_average[i] > moving_average[i - 1] and position == 0:
+                signals.append({"action": "buy", "symbol": "AAPL", "quantity": 10, "price": moving_average.index[i]})
+                position = 1
+            elif moving_average[i] < moving_average[i - 1] and position == 1:
+                signals.append({"action": "sell", "symbol": "AAPL", "quantity": 10, "price": moving_average.index[i]})
+                position = 0
+
+        return signals
+
+    def generate_rsi_signal(self, rsi):
+        # Modify this function similar to generate_moving_average_signal
+        pass
+
+    def generate_macd_signal(self, macd):
+        # Modify this function similar to generate_moving_average_signal
+        pass
+
+
